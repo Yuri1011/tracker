@@ -1,0 +1,973 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tracker</title>
+  <!-- Bootstrap 5 CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { padding-top: 60px; }
+    .container { max-width: 1100px; }
+    .mt-30 { margin-top: 30px; }
+    /* Tag input chips */
+    .tag-input { display: flex; align-items: center; flex-wrap: wrap; padding: 6px; border: 1px solid #ced4da; border-radius: 4px; }
+    .tag-input .tag { background:#e9ecef; border-radius: 3px; padding: 2px 6px; margin: 2px; display: inline-flex; align-items:center; font-size:0.9em; }
+    .tag-input .tag .remove { margin-left:6px; cursor:pointer; color:#6c757d; }
+    .tag-input input.tag-field { border: none; outline: none; flex: 1 0 120px; min-width:80px; padding:4px; }
+    .tag-input:focus-within { box-shadow: 0 0 0 0.15rem rgba(13,110,253,.25); }
+  </style>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+  <div class="container">
+    <a class="navbar-brand" href="#">Tracker</a>
+    <div class="collapse navbar-collapse">
+      <ul class="navbar-nav me-auto"></ul>
+      <span class="navbar-text me-3" id="userInfo">Неавторизован</span>
+      <button class="btn btn-outline-light btn-sm" id="btnLogout" style="display:none;">Выйти</button>
+    </div>
+  </div>
+</nav>
+
+<div class="container" id="loginArea" style="display:none; max-width:600px;">
+  <div class="card mt-4">
+    <div class="card-body">
+      <h5 class="card-title" id="pageAuthTitle">Вход в систему</h5>
+      <p class="form-text mb-3" id="pageAuthHint"><span id="pageAuthHintText">Если вы не зарегистрированы, то нажмите </span><a href="#" id="pageAuthToggleLink">Зарегистрироваться</a></p>
+      <form id="pageAuthForm">
+        <div class="mb-3">
+          <label class="form-label">Имя пользователя</label>
+          <input type="text" class="form-control" id="pageAuthUsername" required>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Пароль</label>
+          <input type="password" class="form-control" id="pageAuthPassword" required>
+        </div>
+        <div class="d-flex justify-content-start">
+          <button type="button" class="btn btn-primary" id="pageAuthAction">Войти</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="container" id="main-container">
+  <div class="d-flex justify-content-between align-items-center">
+    <h1>Задачи</h1>
+    <div>
+      <button class="btn btn-primary" id="btnNewTask">Новая задача</button>
+    </div>
+  </div>
+
+  <div class="row mt-3">
+    <div class="col-md-4">
+      <select id="statusFilter" class="form-select">
+        <option value="">Все статусы</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="table-responsive mt-3">
+    <table class="table table-striped" id="tasksTable">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Заголовок</th>
+          <th>Статус</th>
+          <th>Создано</th>
+          <th>Действия</th>
+        </tr>
+      </thead>
+      <tbody>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Admin section (hidden by default) -->
+<div class="container" id="adminSection" style="display:none; max-width:1200px;">
+  <div id="accessDenied" style="display:none;">
+    <div class="alert alert-danger">Доступ запрещён. Требуется права администратора.</div>
+  </div>
+
+  <div id="adminPanel" style="display:none;">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h2>Заявки (Admin)</h2>
+      <div>
+        <select id="adminStatusFilter" class="form-select form-select-sm d-inline-block me-2" style="width:200px"></select>
+        <select id="adminTagFilter" class="form-select form-select-sm d-inline-block me-2" style="width:200px"></select>
+        <button class="btn btn-sm btn-primary" id="adminRefreshBtn">Обновить</button>
+        <button class="btn btn-sm btn-secondary ms-2" id="adminManageStatusesBtn">Статусы</button>
+        <button class="btn btn-sm btn-secondary ms-2" id="adminManageTagsBtn">Теги</button>
+      </div>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-striped" id="adminTasksTable">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Заголовок</th>
+            <th>Статус</th>
+            <th>Автор</th>
+            <th>Создано</th>
+            <th>Обновл.</th>
+            <th>Действия</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Admin view modal -->
+<div class="modal fade" id="adminViewModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="adminViewTitle">Заявка</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="adminViewBody"></div>
+        <hr>
+        <div class="mb-3">
+          <label class="form-label">Изменить статус</label>
+          <select id="adminChangeStatusSelect" class="form-select"></select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Теги</label>
+          <div id="adminTagsWidget" class="tag-input">
+            <input id="adminTagsField" class="tag-field" placeholder="Добавить тег и нажать Enter">
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Оставить ответ</label>
+          <textarea id="adminResponse" class="form-control" rows="4"></textarea>
+        </div>
+        <div id="adminResponsesList" class="mt-3"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+        <button type="button" class="btn btn-primary" id="adminSaveChanges">Сохранить</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+  <!-- Statuses management modal -->
+  <div class="modal fade" id="statusesModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Управление статусами</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3 d-flex gap-2 align-items-center">
+            <input id="newStatusName" class="form-control" placeholder="Название статуса">
+            <input id="newStatusPosition" type="number" class="form-control" style="width:120px;" placeholder="Позиция">
+            <button id="createStatusBtn" class="btn btn-primary">Добавить</button>
+          </div>
+
+          <div class="table-responsive">
+            <table class="table table-sm" id="statusesTable">
+              <thead><tr><th>id</th><th>Название</th><th>Позиция</th><th>Действия</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+        </div>
+        </div>
+      </div>
+    </div>
+
+        <!-- Tags management modal -->
+        <div class="modal fade" id="tagsModal" tabindex="-1">
+          <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h5 class="modal-title">Управление тегами</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+              </div>
+              <div class="modal-body">
+                <div class="mb-3 d-flex gap-2 align-items-center">
+                  <input id="newTagName" class="form-control" placeholder="Название тега">
+                  <button id="createTagBtn" class="btn btn-primary">Добавить</button>
+                </div>
+
+                <div class="table-responsive">
+                  <table class="table table-sm" id="tagsTable">
+                    <thead><tr><th>id</th><th>Название</th><th>Используется</th><th>Действия</th></tr></thead>
+                    <tbody></tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+<div class="modal fade" id="authModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="authModalTitle">Войти</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="authForm">
+          <div class="mb-3">
+            <label class="form-label">Имя пользователя</label>
+            <input type="text" class="form-control" id="authUsername" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Пароль</label>
+            <input type="password" class="form-control" id="authPassword" required>
+          </div>
+          <div class="form-text mb-2" id="authModeHint">Если у вас нет аккаунта, то нажмите <strong>Зарегистрироваться</strong></div>
+        </form>
+      </div>
+      <div class="modal-footer">
+          <button type="button" class="btn btn-link" id="switchToRegister">Зарегистрироваться</button>
+          <button type="button" class="btn btn-link" id="switchToLogin" style="display:none;">Войти</button>
+          <button type="button" class="btn btn-primary" id="authSubmit">Войти</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="taskModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Создать задачу</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="taskForm">
+          <div class="mb-3">
+            <label class="form-label">Заголовок</label>
+            <input type="text" id="taskTitle" class="form-control" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Описание</label>
+            <textarea id="taskDesc" class="form-control" rows="4"></textarea>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Теги</label>
+            <div id="taskTagsWidget" class="tag-input">
+              <input id="taskTagsField" class="tag-field" placeholder="Добавить тег и нажать Enter">
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+        <button type="button" class="btn btn-primary" id="taskSubmit">Создать</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="taskViewModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="taskViewTitle"></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p><strong>Статус:</strong> <span id="taskViewStatus"></span></p>
+        <p><strong>Создано:</strong> <span id="taskViewCreated"></span></p>
+        <p><strong>Изменено:</strong> <span id="taskViewUpdated"></span></p>
+        <p><strong>Теги:</strong> <span id="taskViewTags"></span></p>
+
+        <h6>Описание:</h6>
+        <p id="taskViewDescription"></p>
+
+        <h6>Ответы администратора:</h6>
+        <ul id="taskViewResponses"></ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+const API_BASE = "http://localhost:8000/api/v1";
+
+function setToken(token) {
+  if (token) localStorage.setItem('tracker_token', token);
+  else localStorage.removeItem('tracker_token');
+}
+function getToken() { return localStorage.getItem('tracker_token'); }
+
+// Добавляем заголовок Authorization ко всем AJAX-запросам, если есть токен
+$.ajaxSetup({
+  beforeSend: function (xhr) {
+    const t = getToken();
+    if (t) xhr.setRequestHeader('Authorization', 'Bearer ' + t);
+  }
+});
+
+// UI и автентификация
+const authModal = new bootstrap.Modal(document.getElementById('authModal'));
+const taskModal = new bootstrap.Modal(document.getElementById('taskModal'));
+let isRegisterMode = false;
+let isPageRegisterMode = false;
+
+function updateUserInfoUI() {
+  const t = getToken();
+  if (t) {
+    // Простейшая индикация — при наличии токена показываем кнопку выйти
+    $('#userInfo').text('Авторизован');
+    $('#main-container').show();
+    $('#loginArea').hide();
+    $('#btnLogout').show();
+    // Ensure admin UI hidden by default; checkCurrentUser() will show it for admins
+    $('#adminSection').hide();
+    $('#adminPanel').hide();
+    $('#accessDenied').hide();
+  } else {
+    $('#userInfo').text('Неавторизован');
+    $('#main-container').hide();
+    $('#loginArea').show();
+    // Сбрасываем состояние формы на страницу (по умолчанию — вход)
+    isPageRegisterMode = false;
+    $('#pageAuthAction').text('Войти');
+    $('#pageAuthToggleLink').text('Зарегистрироваться');
+    $('#pageAuthTitle').text('Вход в систему');
+    $('#btnLogout').hide();
+    // Hide any admin UI when logged out
+    $('#adminSection').hide();
+    $('#adminPanel').hide();
+    $('#accessDenied').hide();
+  }
+}
+
+// Кнопка выйти
+$('#btnLogout').on('click', function () {
+  setToken(null);
+  updateUserInfoUI();
+  loadTasks();
+});
+
+// on-page логин/регистрация: единая кнопка и ссылка-переключатель
+$('#pageAuthAction').on('click', function () {
+  const username = $('#pageAuthUsername').val().trim();
+  const password = $('#pageAuthPassword').val().trim();
+  if (!username || !password) { showToast('Введите имя пользователя и пароль','Внимание','warning'); return; }
+
+  if (isPageRegisterMode) {
+    // Регистрация
+    $.ajax({
+      url: API_BASE + '/auth.php', method: 'POST', contentType: 'application/json',
+      data: JSON.stringify({ username, password, action: 'register' }),
+      success: function () {
+        // После регистрации — автоматически логиним
+        $.ajax({
+          url: API_BASE + '/auth.php', method: 'POST', contentType: 'application/json',
+          data: JSON.stringify({ username, password, action: 'login' }),
+          success: function (res) {
+            setToken(res.token);
+            // Сброс режима и текста
+            isPageRegisterMode = false;
+            $('#pageAuthAction').text('Войти');
+            $('#pageAuthToggleLink').text('Зарегистрироваться');
+            $('#pageAuthTitle').text('Вход в систему');
+            checkCurrentUser();
+          },
+          error: function () { showToast('Ошибка автоматического входа','Ошибка','danger'); }
+        });
+      },
+      error: function (xhr) { showToast(xhr.responseJSON?.error || 'Ошибка регистрации','Ошибка','danger'); }
+    });
+  } else {
+    // Вход
+    $.ajax({
+      url: API_BASE + '/auth.php', method: 'POST', contentType: 'application/json',
+      data: JSON.stringify({ username, password, action: 'login' }),
+      success: function (res) {
+        setToken(res.token);
+        checkCurrentUser();
+      },
+      error: function (xhr) { showToast(xhr.responseJSON?.error || 'Ошибка входа','Ошибка','danger'); }
+    });
+  }
+});
+
+// Ссылка-переключатель режима (под заголовком)
+$('#pageAuthToggleLink').on('click', function (e) {
+  e.preventDefault();
+  isPageRegisterMode = !isPageRegisterMode;
+  if (isPageRegisterMode) {
+    $('#pageAuthAction').text('Зарегистрироваться');
+    $(this).text('Войти');
+    $('#pageAuthTitle').text('Регистрация в системе');
+    $('#pageAuthHintText').text('Если вы уже зарегистрированы, то нажмите ');
+    $('#pageAuthToggleLink').text('Войти');
+  } else {
+    $('#pageAuthAction').text('Войти');
+    $(this).text('Зарегистрироваться');
+    $('#pageAuthTitle').text('Вход в систему');
+    $('#pageAuthHintText').text('Если вы не зарегистрированы, то нажмите ');
+    $('#pageAuthToggleLink').text('Зарегистрироваться');
+  }
+});
+
+// Переключатель регистрация/вход
+$('#switchToRegister').on('click', function () {
+    isRegisterMode = true;
+    $('#authModalTitle').text('Регистрация');
+    $('#authSubmit').text('Зарегистрироваться');
+    $('#authModeHint').html('Если у вас есть аккаунт, то нажмите  <strong>Войти</strong>');
+    $('#switchToRegister').hide();
+    $('#switchToLogin').show();
+});
+
+$('#switchToLogin').on('click', function () {
+    isRegisterMode = false;
+    $('#authModalTitle').text('Войти');
+    $('#authSubmit').text('Войти');
+    $('#authModeHint').html('Если у вас нет аккаунта, то нажмите <strong>Зарегистрироваться</strong>');
+    $('#switchToLogin').hide();
+    $('#switchToRegister').show();
+});
+
+// Обработчик формы авторизации/регистрации
+$('#authSubmit').on('click', function () {
+  const username = $('#authUsername').val().trim();
+  const password = $('#authPassword').val().trim();
+  if (!username || !password) { showToast('Введите имя пользователя и пароль','Внимание','warning'); return; }
+
+if (isRegisterMode) {
+    $.ajax({
+        url: API_BASE + '/auth.php', 
+        method: 'POST', 
+        contentType: 'application/json',
+        data: JSON.stringify({ username, password, action: "register" }),
+
+        success: function (res) {
+            // После успешной регистрации, выполняем вход
+            $.ajax({
+                url: API_BASE + '/auth.php',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ username, password, action: "login" }),
+
+                success: function (resLogin) {
+                    setToken(resLogin.token);
+                    authModal.hide();
+                  checkCurrentUser();
+                },
+
+                error: function () { showToast('Ошибка автоматического входа','Ошибка','danger'); }
+            });
+        },
+
+        error: function (xhr) { 
+            console.log(xhr.responseJSON?.error || 'Ошибка регистрации'); 
+        }
+    });
+} else {
+    $.ajax({
+      url: API_BASE + '/auth.php', method: 'POST', contentType: 'application/json',
+      data: JSON.stringify({ username, password, action: "login" }),
+      success: function (res) {
+        setToken(res.token);
+        authModal.hide();
+        checkCurrentUser();
+      },
+      error: function (xhr) { console.log(xhr.responseJSON?.error || 'Ошибка входа'); }
+    });
+  }
+});
+
+// Загрузка задач
+function renderTasks(tasks) {
+  const tbody = $('#tasksTable tbody').empty();
+  if (!tasks || tasks.length === 0) {
+    tbody.append('<tr><td colspan="5" class="text-center">Нет задач</td></tr>');
+    return;
+  }
+  tasks.forEach(function (t, idx) {
+    const row = $(
+      `<tr>
+        <td>${t.id || idx+1}</td>
+        <td>${escapeHtml(t.title || '')}</td>
+        <td>${escapeHtml(t.status_name || t.status || '')}</td>
+        <td>${escapeHtml(t.created_at || '')}</td>
+        <td>
+          <button class="btn btn-sm btn-outline-primary btn-view" data-id="${t.id}">Открыть</button>
+        </td>
+      </tr>`
+    );
+    tbody.append(row);
+  });
+}
+
+function loadTasks() {
+  const params = {};
+  const status = $('#statusFilter').val();
+  if (status) params.status_id = status;
+
+  $.ajax({
+    url: API_BASE + '/tasks.php', method: 'GET', data: params,
+    success: function (res) { renderTasks(res.tasks || []); },
+    error: function (xhr) {
+      if (xhr.status === 401) {
+        // Неавторизован, очищаем UI
+        setToken(null);
+        updateUserInfoUI();
+        renderTasks([]);
+      } else {
+        console.log('Ошибка при загрузке задач');
+      }
+    }
+  });
+}
+
+// helper: простая HTML-экранировка
+function escapeHtml(s) { return String(s).replace(/[&<>\"']/g, function (c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;','\'':"&#39;"}[c]; }); }
+
+// Показывать bootstrap-тост
+function showToast(message, title = '', type = 'info', timeout = 5000) {
+  const bg = (type === 'danger') ? 'danger' : (type === 'warning' ? 'warning' : (type === 'success' ? 'success' : 'info'));
+  const id = 'toast-' + Date.now() + Math.floor(Math.random()*1000);
+  const titleHtml = title ? ('<strong>' + escapeHtml(title) + ':</strong> ') : '';
+  const html = `<div id="${id}" class="toast align-items-center text-bg-${bg} border-0 mb-2" role="alert" aria-live="assertive" aria-atomic="true" data-bs-delay="${timeout}">` +
+               `<div class="d-flex"><div class="toast-body">${titleHtml}${escapeHtml(message)}</div>` +
+               `<button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Закрыть"></button></div></div>`;
+  $('#toastContainer').append(html);
+  const el = document.getElementById(id);
+  const bs = new bootstrap.Toast(el);
+  bs.show();
+  setTimeout(() => { $(el).remove(); }, timeout + 500);
+}
+
+// Кнопка фильтра
+// removed search button; status filter will reload tasks on change
+$('#statusFilter').on('change', function () { loadTasks(); });
+
+// Нажатие создать задачу
+$('#btnNewTask').on('click', function () { taskModal.show(); });
+
+$('#taskSubmit').on('click', function () {
+    const title = $('#taskTitle').val().trim();
+    const description = $('#taskDesc').val().trim();
+    const tags = getTagsFromWidget('taskTagsWidget');
+
+    $.ajax({
+        url: API_BASE + '/tasks.php',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ 
+            title, 
+            description,
+            tags 
+        }),
+        success: function (res) {
+            taskModal.hide();
+            $('#taskForm')[0].reset();
+            setTagsToWidget('taskTagsWidget', []); // очистка тэгов в виджете
+            loadTasks();
+        },
+        error: function (xhr) {
+            console.log(xhr.responseJSON?.error || 'Ошибка создания задачи');
+        }
+    });
+});
+
+// При клике на строке задачи на кнопку Открыть
+$('#tasksTable').on('click', '.btn-view', function () {
+  const id = $(this).data('id');
+
+  $.ajax({
+    url: API_BASE + '/tasks.php?id=' + id,
+    method: 'GET',
+    success: function (res) {
+      const t = res.task;
+
+      $('#taskViewTitle').text(t.title);
+      $('#taskViewStatus').text(t.status_name);
+      $('#taskViewCreated').text(t.created_at);
+      $('#taskViewUpdated').text(t.updated_at || '-');
+      $('#taskViewTags').text((t.tags || []).join(', '));
+      $('#taskViewDescription').text(t.description);
+
+      const responsesList = $('#taskViewResponses').empty();
+      t.responses.forEach(r => {
+        responsesList.append(`<li><strong>${r.admin_username}:</strong> ${r.message} (${r.created_at})</li>`);
+      });
+
+      const modal = new bootstrap.Modal(document.getElementById('taskViewModal'));
+      modal.show();
+    },
+    error: function () {
+      showToast('Не удалось загрузить задачу','Ошибка','danger');
+    }
+  });
+});
+
+// Инициализация страницы
+$(function () {
+  createTagWidget('taskTagsWidget', 'taskTagsField');
+  createTagWidget('adminTagsWidget', 'adminTagsField');
+
+  const t = getToken();
+  if (!t) {
+    updateUserInfoUI();
+    return;
+  }
+
+  checkCurrentUser();
+});
+
+function createTagWidget(widgetId, fieldId) {
+  const container = $('#' + widgetId);
+  const field = $('#' + fieldId);
+  const tags = [];
+  const MAX_TAG_LENGTH = 25;
+  let suggestions = [];
+  const dataListId = widgetId + '-list';
+  if (!document.getElementById(dataListId)) {
+    field.attr('list', dataListId);
+    field.after(`<datalist id="${dataListId}"></datalist>`);
+  }
+  // fetch suggestions once
+  function fetchSuggestions() {
+    $.ajax({ url: API_BASE + '/tags.php', method: 'GET', success: function(res){ suggestions = (res.tags||[]).map(t=>t.name); renderDatalist(); }, error: function(){ /* ignore */ } });
+  }
+  function renderDatalist() {
+    const dl = document.getElementById(dataListId);
+    if (!dl) return;
+    dl.innerHTML = '';
+    suggestions.forEach(s => { const opt = document.createElement('option'); opt.value = s; dl.appendChild(opt); });
+  }
+
+  // simple Levenshtein distance (iterative)
+  function levenshtein(a, b) {
+    a = a || '';
+    b = b || '';
+    const al = a.length, bl = b.length;
+    if (al === 0) return bl;
+    if (bl === 0) return al;
+    const v0 = new Array(bl + 1), v1 = new Array(bl + 1);
+    for (let j = 0; j <= bl; j++) v0[j] = j;
+    for (let i = 0; i < al; i++) {
+      v1[0] = i + 1;
+      for (let j = 0; j < bl; j++) {
+        const cost = a.charAt(i) === b.charAt(j) ? 0 : 1;
+        v1[j+1] = Math.min(v1[j] + 1, v0[j+1] + 1, v0[j] + cost);
+      }
+      for (let j = 0; j <= bl; j++) v0[j] = v1[j];
+    }
+    return v1[bl];
+  }
+
+  function render() {
+    container.children('.tag').remove();
+    tags.forEach(function(t, idx) {
+      const tagEl = $(`<span class="tag" data-idx="${idx}"></span>`);
+      tagEl.text(t);
+      const rem = $(`<span class="remove">\u00d7</span>`);
+      rem.on('click', function() { tags.splice(idx,1); render(); });
+      tagEl.append(rem);
+      field.before(tagEl);
+    });
+
+    if (widgetId === 'adminTagsWidget' && window.adminCurrentTaskId && !window.adminTagWidgetSuppressSave) {
+      const payload = { action: 'tags', task_id: window.adminCurrentTaskId, tags: tags };
+      $.ajax({ url: API_BASE + '/task_update.php', method: 'POST', contentType: 'application/json', data: JSON.stringify(payload), success: function(res){
+        adminLoadTasks();
+      }, error: function(xhr){ console.log('Failed to save tags'); } });
+    }
+  }
+
+  field.on('keydown', function(e) {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      const v = field.val().trim();
+      if (!v) return;
+      const parts = v.split(',').map(s=>s.trim()).filter(Boolean);
+      for (const p0 of parts) {
+        let p = (p0||'').trim().toLowerCase();
+        if (!p) continue;
+        if (p.length > MAX_TAG_LENGTH) { showToast('Тег слишком длинный (макс ' + MAX_TAG_LENGTH + ' символов): ' + p, 'Внимание', 'warning'); p = p.substring(0, MAX_TAG_LENGTH); }
+        // exact duplicate
+        if (tags.includes(p)) continue;
+        // fuzzy match against existing tags in widget
+        let found = null;
+        for (const ex of tags) {
+          if (ex === p) { found = ex; break; }
+          const d = levenshtein(ex, p);
+          if (d <= 1 && Math.min(ex.length, p.length) > 3) { found = ex; break; }
+        }
+        // fuzzy match against global suggestions
+        if (!found) {
+          for (const ex of suggestions) {
+            if (ex === p) { found = ex; break; }
+            const d = levenshtein(ex, p);
+            if (d <= 1 && Math.min(ex.length, p.length) > 3) { found = ex; break; }
+          }
+        }
+        if (found) {
+          // use existing similar tag
+          if (!tags.includes(found)) tags.push(found);
+          showToast('Тег похож на «' + found + '», использую существующий', 'Инфо', 'info');
+        } else {
+          tags.push(p);
+        }
+      }
+      field.val('');
+      render();
+    } else if (e.key === 'Backspace' && field.val() === '') {
+      if (tags.length > 0) { tags.pop(); render(); }
+    }
+  });
+
+  // on focus, fetch suggestions (if not fetched)
+  field.on('focus', function(){ if (suggestions.length === 0) fetchSuggestions(); });
+
+  container.data('getTags', function(){ return tags.slice(); });
+  container.data('setTags', function(arr){ tags.length = 0; (arr||[]).forEach(function(a){ a = (a||'').trim(); if (a && !tags.includes(a)) {
+      a = a.toLowerCase();
+      if (a.length > MAX_TAG_LENGTH) a = a.substring(0, MAX_TAG_LENGTH);
+      if (!tags.includes(a)) tags.push(a);
+    } }); render(); });
+}
+
+function getTagsFromWidget(widgetId) { const fn = $('#' + widgetId).data('getTags'); return fn ? fn() : []; }
+function setTagsToWidget(widgetId, tags) { const fn = $('#' + widgetId).data('setTags'); if (fn) fn(tags); }
+
+// Проверка текущего пользователя и переключение UI (вызывается после логина и на старте)
+function checkCurrentUser() {
+  $.ajax({ url: API_BASE + '/me.php', method: 'GET', success: function(res) {
+    const u = res.user;
+    if (u && u.is_admin) {
+      $('#loginArea').hide();
+      $('#main-container').hide();
+      $('#adminSection').show();
+      $('#accessDenied').hide();
+      $('#adminPanel').show();
+      $('#btnLogout').show();
+      $('#userInfo').text(u.username + (u.is_admin ? ' (admin)' : ''));
+      adminInit();
+    } else {
+      updateUserInfoUI();
+      if (u && u.username) {
+        $('#userInfo').text(u.username);
+      }
+      if (getToken()) loadTasks();
+      // load statuses for main UI filter
+      loadStatusesMain();
+    }
+  }, error: function() {
+    setToken(null);
+    updateUserInfoUI();
+  }});
+}
+
+// Admin functions
+const adminViewModal = new bootstrap.Modal(document.getElementById('adminViewModal'));
+let adminCurrentTaskId = null;
+let adminTagWidgetSuppressSave = false;
+const statusesModal = new bootstrap.Modal(document.getElementById('statusesModal'));
+const tagsModal = new bootstrap.Modal(document.getElementById('tagsModal'));
+
+function adminInit() {
+  adminLoadStatuses();
+  adminLoadTags();
+  adminLoadTasks();
+}
+
+function adminLoadStatuses() {
+  $.ajax({ url: API_BASE + '/statuses.php', method: 'GET', success: function(res){
+    const sts = res.statuses || [];
+    const sel = $('#adminStatusFilter').empty().append('<option value="">Все статусы</option>');
+    const sel2 = $('#adminChangeStatusSelect').empty();
+    sts.forEach(s => { sel.append(`<option value="${s.id}">${s.name}</option>`); sel2.append(`<option value="${s.id}">${s.name}</option>`); });
+  }});
+}
+
+function loadStatusesMain() {
+  $.ajax({ url: API_BASE + '/statuses.php', method: 'GET', success: function(res){
+    const sts = res.statuses || [];
+    const sel = $('#statusFilter').empty().append('<option value="">Все статусы</option>');
+    sts.forEach(s => { sel.append(`<option value="${s.id}">${escapeHtml(s.name)}</option>`); });
+  }, error: function(){ /* ignore */ }});
+}
+
+function adminLoadTags() {
+  $.ajax({ url: API_BASE + '/tags.php', method: 'GET', success: function(res){
+    const tags = res.tags || [];
+    const sel = $('#adminTagFilter').empty().append('<option value="">Все теги</option>');
+    tags.forEach(t => { sel.append(`<option value="${escapeHtml(t.name)}">${escapeHtml(t.name)} (${t.usage_count})</option>`); });
+  }, error: function(){ /* ignore */ }});
+}
+
+function adminLoadTasks() {
+  const status = $('#adminStatusFilter').val();
+  const tag = $('#adminTagFilter').val();
+  const params = {};
+  if (status) params.status_id = status;
+  if (tag) params.tag = tag;
+  $.ajax({ url: API_BASE + '/tasks.php', method: 'GET', data: params, success: function(res){
+    const rows = res.tasks || [];
+    const tbody = $('#adminTasksTable tbody').empty();
+    if(rows.length === 0) { tbody.append('<tr><td colspan="7" class="text-center">Нет задач</td></tr>'); return; }
+    rows.forEach(t => {
+      const tr = $(`<tr>
+        <td>${t.id}</td>
+        <td>${escapeHtml(t.title)}</td>
+        <td>${escapeHtml(t.status_name)}</td>
+        <td>${escapeHtml(t.author || t.user_id || '')}</td>
+        <td>${t.created_at}</td>
+        <td>${t.updated_at || ''}</td>
+        <td><button class="btn btn-sm btn-outline-primary admin-btn-view" data-id="${t.id}">Открыть</button></td>
+      </tr>`);
+      tbody.append(tr);
+    });
+  }, error: function(xhr){ if(xhr.status===401){ showToast('Требуется авторизация','Ошибка','danger'); setToken(null); window.location.href='index.html'; } else console.log('Ошибка загрузки задач'); }});
+}
+
+$('#adminRefreshBtn').on('click', adminLoadTasks);
+$('#adminStatusFilter').on('change', adminLoadTasks);
+$('#adminTagFilter').on('change', adminLoadTasks);
+
+$('#adminTasksTable').on('click', '.admin-btn-view', function(){
+  adminCurrentTaskId = $(this).data('id');
+  $.ajax({ url: API_BASE + '/tasks.php?id=' + adminCurrentTaskId, method: 'GET', success: function(res){
+    const t = res.task;
+    $('#adminViewTitle').text('#'+t.id+' — '+t.title);
+    $('#adminViewBody').html(`<p><strong>Описание:</strong><br>${escapeHtml(t.description||'')}</p><p><strong>Статус:</strong> ${escapeHtml(t.status_name||'')}</p><p><strong>Автор:</strong> ${escapeHtml(t.author||'')}</p>`);
+    $('#adminChangeStatusSelect').val(t.status_id);
+    adminTagWidgetSuppressSave = true;
+    setTagsToWidget('adminTagsWidget', (t.tags || []));
+    adminTagWidgetSuppressSave = false;
+    const rlist = $('#adminResponsesList').empty();
+    (t.responses||[]).forEach(r => { rlist.append(`<div class="card mb-2"><div class="card-body"><div class="small text-muted">${r.created_at} — ${escapeHtml(r.admin_username||'admin')}</div><div>${escapeHtml(r.message)}</div></div></div>`); });
+    adminViewModal.show();
+  }, error: function(){ showToast('Не удалось загрузить заявку','Ошибка','danger'); }});
+});
+
+$('#adminSaveChanges').on('click', function(){
+  const newStatus = $('#adminChangeStatusSelect').val();
+  const message = $('#adminResponse').val().trim();
+  const tags = getTagsFromWidget('adminTagsWidget');
+  const actions = [];
+  if(newStatus) actions.push({action:'status', task_id: adminCurrentTaskId, status_id: parseInt(newStatus)});
+  if(message) actions.push({action:'response', task_id: adminCurrentTaskId, message: message});
+  actions.push({action:'tags', task_id: adminCurrentTaskId, tags: tags});
+
+  (function run(i){ if(i>=actions.length){ $('#adminResponse').val(''); adminViewModal.hide(); adminLoadTasks(); return; }
+    $.ajax({ url: API_BASE + '/task_update.php', method: 'POST', contentType: 'application/json', data: JSON.stringify(actions[i]), success: function(){ run(i+1); }, error: function(){ showToast('Ошибка при сохранении','Ошибка','danger'); }});
+  })(0);
+});
+
+// Statuses management JS
+function loadStatusesAdminList() {
+  $.ajax({ url: API_BASE + '/statuses.php', method: 'GET', success: function(res) {
+    const rows = res.statuses || [];
+    const tbody = $('#statusesTable tbody').empty();
+    rows.forEach(s => {
+      const tr = $(`<tr data-id="${s.id}"><td>${s.id}</td><td>${escapeHtml(s.name)}</td><td>${s.position}</td><td></td></tr>`);
+      const actions = $('<div class="btn-group"></div>');
+      const edit = $(`<button class="btn btn-sm btn-outline-secondary">Ред.</button>`).on('click', function(){ showEditStatusRow(s); });
+      const del = $(`<button class="btn btn-sm btn-outline-danger">Удал.</button>`).on('click', function(){ deleteStatus(s.id); });
+      actions.append(edit).append(del);
+      tr.find('td').last().append(actions);
+      tbody.append(tr);
+    });
+  }, error: function(xhr){ showToast('Не удалось загрузить статусы','Ошибка','danger'); }});
+}
+
+function showEditStatusRow(s) {
+  // replace row with inputs
+  const row = $(`#statusesTable tbody tr[data-id='${s.id}']`);
+  const html = `<td>${s.id}</td><td><input class="form-control form-control-sm status-edit-name" value="${escapeHtml(s.name)}"></td><td><input type="number" class="form-control form-control-sm status-edit-pos" value="${s.position}"></td><td><div class="btn-group"><button class="btn btn-sm btn-primary status-save-btn">Сохранить</button><button class="btn btn-sm btn-secondary status-cancel-btn">Отмена</button></div></td>`;
+  row.html(html);
+  row.find('.status-cancel-btn').on('click', function(){ loadStatusesAdminList(); });
+  row.find('.status-save-btn').on('click', function(){
+    const name = row.find('.status-edit-name').val().trim();
+    const pos = parseInt(row.find('.status-edit-pos').val()||0,10);
+    if (!name) { showToast('Название обязательно','Внимание','warning'); return; }
+    $.ajax({ url: API_BASE + '/statuses.php?id=' + s.id, method: 'POST', contentType: 'application/json', data: JSON.stringify({ name: name, position: pos, id: s.id, _method: 'PUT' }), success: function(res){ loadStatusesAdminList(); adminLoadStatuses(); }, error: function(xhr){ showToast(xhr.responseJSON?.error || 'Ошибка при сохранении','Ошибка','danger'); } });
+  });
+}
+
+function createStatus() {
+  const name = $('#newStatusName').val().trim();
+  const posVal = $('#newStatusPosition').val();
+  const position = posVal ? parseInt(posVal,10) : undefined;
+  if (!name) { showToast('Введите имя статуса','Внимание','warning'); return; }
+  $.ajax({ url: API_BASE + '/statuses.php', method: 'POST', contentType: 'application/json', data: JSON.stringify({ name: name, position: position }), success: function(res){ $('#newStatusName').val(''); $('#newStatusPosition').val(''); loadStatusesAdminList(); adminLoadStatuses(); }, error: function(xhr){ showToast(xhr.responseJSON?.error || 'Ошибка при создании','Ошибка','danger'); } });
+}
+
+function deleteStatus(id) {
+  if (!confirm('Удалить статус? Если он используется в задачах — удаление будет запрещено.')) return;
+  $.ajax({ url: API_BASE + '/statuses.php?id=' + id, method: 'DELETE', success: function(){ loadStatusesAdminList(); adminLoadStatuses(); }, error: function(xhr){ showToast(xhr.responseJSON?.error || 'Ошибка при удалении','Ошибка','danger'); } });
+}
+
+$('#adminManageStatusesBtn').on('click', function(){ loadStatusesAdminList(); statusesModal.show(); });
+$('#createStatusBtn').on('click', createStatus);
+
+function loadTagsAdminList() {
+  $.ajax({ url: API_BASE + '/tags.php', method: 'GET', success: function(res) {
+    const rows = res.tags || [];
+    const tbody = $('#tagsTable tbody').empty();
+    rows.forEach(t => {
+      const tr = $(`<tr data-id="${t.id}"><td>${t.id}</td><td>${escapeHtml(t.name)}</td><td>${t.usage_count}</td><td></td></tr>`);
+      const actions = $('<div class="btn-group"></div>');
+      const edit = $(`<button class="btn btn-sm btn-outline-secondary">Ред.</button>`).on('click', function(){ showEditTagRow(t); });
+      const del = $(`<button class="btn btn-sm btn-outline-danger">Удал.</button>`).on('click', function(){ deleteTag(t.id); });
+      actions.append(edit).append(del);
+      tr.find('td').last().append(actions);
+      tbody.append(tr);
+    });
+  }, error: function(xhr){ showToast('Не удалось загрузить теги','Ошибка','danger'); }});
+}
+
+function showEditTagRow(t) {
+  const row = $(`#tagsTable tbody tr[data-id='${t.id}']`);
+  const html = `<td>${t.id}</td><td><input class="form-control form-control-sm tag-edit-name" value="${escapeHtml(t.name)}"></td><td>${t.usage_count}</td><td><div class="btn-group"><button class="btn btn-sm btn-primary tag-save-btn">Сохранить</button><button class="btn btn-sm btn-secondary tag-cancel-btn">Отмена</button></div></td>`;
+  row.html(html);
+  row.find('.tag-cancel-btn').on('click', function(){ loadTagsAdminList(); });
+  row.find('.tag-save-btn').on('click', function(){
+    const name = row.find('.tag-edit-name').val().trim();
+    if (!name) { showToast('Название обязательно','Внимание','warning'); return; }
+    if (name.length > 25) { showToast('Тег слишком длинный (макс 25 символов)','Внимание','warning'); return; }
+    $.ajax({ url: API_BASE + '/tags.php?id=' + t.id, method: 'POST', contentType: 'application/json', data: JSON.stringify({ name: name, id: t.id, _method: 'PUT' }), success: function(res){ loadTagsAdminList(); }, error: function(xhr){ showToast(xhr.responseJSON?.error || 'Ошибка при сохранении','Ошибка','danger'); } });
+  });
+}
+
+function createTag() {
+  const name = $('#newTagName').val().trim();
+  if (!name) { showToast('Введите имя тега','Внимание','warning'); return; }
+  if (name.length > 25) { showToast('Тег слишком длинный (макс 25 символов)','Внимание','warning'); return; }
+  $.ajax({ url: API_BASE + '/tags.php', method: 'POST', contentType: 'application/json', data: JSON.stringify({ name: name }), success: function(res){ $('#newTagName').val(''); loadTagsAdminList(); }, error: function(xhr){ showToast(xhr.responseJSON?.error || 'Ошибка при создании','Ошибка','danger'); } });
+}
+
+function deleteTag(id) {
+  if (!confirm('Удалить тег? Если он используется в задачах — удаление будет запрещено.')) return;
+  $.ajax({ url: API_BASE + '/tags.php?id=' + id, method: 'DELETE', success: function(){ loadTagsAdminList(); }, error: function(xhr){ showToast(xhr.responseJSON?.error || 'Ошибка при удалении','Ошибка','danger'); } });
+}
+
+$('#adminManageTagsBtn').on('click', function(){ loadTagsAdminList(); tagsModal.show(); });
+$('#createTagBtn').on('click', createTag);
+</script>
+<div aria-live="polite" aria-atomic="true" class="position-fixed bottom-0 end-0 p-3" style="z-index:10800;">
+  <div id="toastContainer"></div>
+</div>
+</body>
+</html>
