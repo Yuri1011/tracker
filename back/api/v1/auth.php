@@ -2,7 +2,6 @@
 require_once dirname(__DIR__, 2) . '/cors.php';
 require_once dirname(__DIR__, 2) . '/bootstrap.php';
 
-//тип запроса
 $method = $_SERVER['REQUEST_METHOD'];
 
 if ($method !== 'POST') {
@@ -84,7 +83,7 @@ function handleLogin($pdo, $data)
     // Генерируем токен
     $token = generateToken($user['id'], $user['is_admin']);
 
-    // Возвращаем токен и безопасную информацию о пользователе (без password_hash)
+    // Возвращаем токен
     $userSafe = [
         'id' => (int)$user['id'],
         'username' => $user['username'],
