@@ -355,11 +355,12 @@ function updateUserInfoUI() {
   }
 }
 
-// Кнопка выйти
+// Кнопка выйти: удаляем токен и очищаем UI без запроса к серверу
 $('#btnLogout').on('click', function () {
   setToken(null);
   updateUserInfoUI();
-  loadTasks();
+  // Не делаем AJAX-запрос при выходе — просто очищаем таблицу задач локально
+  renderTasks([]);
 });
 
 // on-page логин/регистрация: единая кнопка и ссылка-переключатель
@@ -379,14 +380,14 @@ $('#pageAuthAction').on('click', function () {
           url: API_BASE + '/auth.php', method: 'POST', contentType: 'application/json',
           data: JSON.stringify({ username, password, action: 'login' }),
           success: function (res) {
-            setToken(res.token);
-            // Сброс режима и текста
-            isPageRegisterMode = false;
-            $('#pageAuthAction').text('Войти');
-            $('#pageAuthToggleLink').text('Зарегистрироваться');
-            $('#pageAuthTitle').text('Вход в систему');
-            checkCurrentUser();
-          },
+              setToken(res.token);
+              // Сброс режима и текста
+              isPageRegisterMode = false;
+              $('#pageAuthAction').text('Войти');
+              $('#pageAuthToggleLink').text('Зарегистрироваться');
+              $('#pageAuthTitle').text('Вход в систему');
+              if (res && res.user) applyUserUIFromUserObject(res.user); else checkCurrentUser();
+            },
           error: function () { showToast('Ошибка автоматического входа','Ошибка','danger'); }
         });
       },
@@ -399,7 +400,7 @@ $('#pageAuthAction').on('click', function () {
       data: JSON.stringify({ username, password, action: 'login' }),
       success: function (res) {
         setToken(res.token);
-        checkCurrentUser();
+        if (res && res.user) applyUserUIFromUserObject(res.user); else checkCurrentUser();
       },
       error: function (xhr) { showToast(xhr.responseJSON?.error || 'Ошибка входа','Ошибка','danger'); }
     });
@@ -468,7 +469,7 @@ if (isRegisterMode) {
                 success: function (resLogin) {
                     setToken(resLogin.token);
                     authModal.hide();
-                  checkCurrentUser();
+                  if (resLogin && resLogin.user) applyUserUIFromUserObject(resLogin.user); else checkCurrentUser();
                 },
 
                 error: function () { showToast('Ошибка автоматического входа','Ошибка','danger'); }
@@ -486,7 +487,7 @@ if (isRegisterMode) {
       success: function (res) {
         setToken(res.token);
         authModal.hide();
-        checkCurrentUser();
+        if (res && res.user) applyUserUIFromUserObject(res.user); else checkCurrentUser();
       },
       error: function (xhr) { console.log(xhr.responseJSON?.error || 'Ошибка входа'); }
     });
@@ -776,6 +777,25 @@ function checkCurrentUser() {
     setToken(null);
     updateUserInfoUI();
   }});
+}
+
+// Apply UI based on already-available user object (no extra AJAX)
+function applyUserUIFromUserObject(u) {
+  if (u && Number(u.is_admin) === 1) {
+    $('#loginArea').hide();
+    $('#main-container').hide();
+    $('#adminSection').show();
+    $('#accessDenied').hide();
+    $('#adminPanel').show();
+    $('#btnLogout').show();
+    $('#userInfo').text(u.username + ' (admin)');
+    adminInit();
+  } else {
+    updateUserInfoUI();
+    if (u && u.username) $('#userInfo').text(u.username);
+    if (getToken()) loadTasks();
+    loadStatusesMain();
+  }
 }
 
 // Admin functions

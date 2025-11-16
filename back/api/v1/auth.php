@@ -69,7 +69,7 @@ function handleLogin($pdo, $data)
     $password = trim($data['password']);
 
     // Ищем пользователя
-    $stmt = $pdo->prepare("SELECT id, password_hash, is_admin FROM users WHERE username = ?");
+    $stmt = $pdo->prepare("SELECT id, username, password_hash, is_admin FROM users WHERE username = ?");
     $stmt->execute([$username]);
     $user = $stmt->fetch();
 
@@ -84,5 +84,12 @@ function handleLogin($pdo, $data)
     // Генерируем токен
     $token = generateToken($user['id'], $user['is_admin']);
 
-    jsonResponse(["token" => $token]);
+    // Возвращаем токен и безопасную информацию о пользователе (без password_hash)
+    $userSafe = [
+        'id' => (int)$user['id'],
+        'username' => $user['username'],
+        'is_admin' => (int)$user['is_admin']
+    ];
+
+    jsonResponse(["token" => $token, "user" => $userSafe]);
 }

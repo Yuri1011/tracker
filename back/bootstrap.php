@@ -29,12 +29,17 @@ function jsonResponse($data, int $status = 200) {
 }
 
 //получаем JSON из запроса
+//получаем JSON из запроса (кешируем, чтобы можно было читать тело несколько раз)
 function getJsonInput() {
-    return json_decode(file_get_contents('php://input'), true);
+    static $cached = null;
+    if ($cached !== null) return $cached;
+    $raw = file_get_contents('php://input');
+    $cached = json_decode($raw, true);
+    return $cached;
 }
 
-//JWT параметры
-$JWT_SECRET = "supersecretkey";
+//JWT параметры (читаем из окружения, если не задан — используем дефолт)
+$JWT_SECRET = getenv('JWT_SECRET') ?: "supersecretkey";
 
 //Создание JWT токен
 function generateToken($userId, $isAdmin) {

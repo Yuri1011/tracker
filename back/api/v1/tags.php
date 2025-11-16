@@ -2,7 +2,17 @@
 require_once dirname(__DIR__, 2) . '/cors.php';
 require_once dirname(__DIR__, 2) . '/bootstrap.php';
 
+// HTTP method, support override via JSON `_method` for clients that send POST
 $method = $_SERVER['REQUEST_METHOD'];
+if ($method === 'POST') {
+    $body = getJsonInput();
+    if (is_array($body) && isset($body['_method'])) {
+        $maybe = strtoupper($body['_method']);
+        if (in_array($maybe, ['PUT', 'PATCH', 'DELETE'])) {
+            $method = $maybe;
+        }
+    }
+}
 
 // GET: list tags with usage count
 if ($method === 'GET') {
